@@ -65,7 +65,6 @@ struct ContentView: View {
     
     private var KRWSection: some View {
         Section {
-            // run exploit
             LabeledContent(content: {
                 if mgr.dsready {
                     Image(systemName: "checkmark.circle")
@@ -82,10 +81,9 @@ struct ContentView: View {
                     offsets_init()
                     mgr.run()
                 })
-                .disabled(!mgr.hasOffsets || mgr.dsready || mgr.dsrunning || isdebugged())
+                .disabled(mgr.dsready || mgr.dsrunning || isdebugged())
             }
             
-            // hybrid button
             if selectedmethod == .hybrid {
                 LabeledContent(content: {
                     if mgr.vfsready && mgr.sbxready {

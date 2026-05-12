@@ -8,6 +8,7 @@
 import SwiftUI
 
 struct TweaksView: View {
+    @AppStorage("logsdisplaymode") private var selectedlogsdisplaymode: logsdisplaymode = .toolbar
     @ObservedObject var mgr: laramgr
     
     var body: some View {
@@ -23,8 +24,8 @@ struct TweaksView: View {
                 Section(header: HeaderLabel(text: "User Interface", icon: "eye")) {
                     NavigationLink("dirtyZero", destination: ZeroView(mgr: mgr))
                         .disabled(!mgr.vfsready)
-                    //NavigationLink("MobileGestalt", destination: GestaltView())
-                        //.disabled(!mgr.sbxready)
+                    NavigationLink("MobileGestalt", destination: GestaltView())
+                        .disabled(!mgr.sbxready)
                     NavigationLink("Card Overwrite", destination: CardView())
                     NavigationLink("Font Overwrite", destination: FontPicker(mgr: mgr))
                         .disabled(!mgr.vfsready)
@@ -50,7 +51,15 @@ struct TweaksView: View {
                 NavigationLink("Extra Tools", destination: ToolsView())
             }
             .navigationTitle("Tweaks")
-            //.disabled(!mgr.sbxready || !mgr.vfsready || !mgr.rcready)
+            .toolbar {
+                if selectedlogsdisplaymode == .toolbar {
+                    Button(action: {
+                        mgr.showLogs.toggle()
+                    }) {
+                        Image(systemName: "terminal")
+                    }
+                }
+            }
         }
     }
 }

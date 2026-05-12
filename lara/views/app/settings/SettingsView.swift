@@ -34,12 +34,12 @@ struct SettingsView: View {
     @AppStorage("keepAlive") private var keepAlive: Bool = false
     @AppStorage("stashKRW") private var stashKRW: Bool = false
     
-    @State private var downloadingKcache: Bool = false
-    @State private var showKcacheImporter: Bool = false
-    @State private var importingKcache: Bool = false
-    @State private var showKcacheTips: Bool = false
+    @State private var dlingkcache: Bool = false
+    @State private var showkcacheimport: Bool = false
+    @State private var importingkcache: Bool = false
+    @State private var showkcachetips: Bool = false
     
-    @AppStorage("logsdisplaymode") private var selectedLogsDisplayMode: logsdisplaymode = .toolbar
+    @AppStorage("logsdisplaymode") private var selectedlogdisplaymode: logsdisplaymode = .toolbar
     @AppStorage("loggerNoBS") private var loggerNoBS: Bool = true
     
     @AppStorage("showFMInTabs") private var showFMInTabs: Bool = true
@@ -68,60 +68,76 @@ struct SettingsView: View {
                 }
                 
                 // kernelcache
-                Section(header: HeaderLabel(text: "Kernelcache", icon: "cpu"), footer: Text("Deleting and redownloading kernelcache may fix some issues. Try doing this before opening an issue on GitHub or asking for support in our [Discord](https://discord.gg/gw8PcRF3Jr) server.")) {
-                    // download kcache
+                Section {
                     if !mgr.hasOffsets {
-                        Button(action: {
-                            guard !downloadingKcache else { return }
-                            downloadingKcache = true
+                        Button {
+                            guard !dlingkcache else { return }
+                            dlingkcache = true
+
                             DispatchQueue.global(qos: .userInitiated).async {
-                                let ok = dlkerncache()
+                                let fetched = fetchkcache()
+
+                                if fetched {
+                                    DispatchQueue.main.async {
+                                        mgr.hasOffsets = true
+                                        dlingkcache = false
+                                    }
+                                    return
+                                }
+
+                                let dlkc = dlkcache()
+
                                 DispatchQueue.main.async {
-                                    mgr.hasOffsets = ok
-                                    downloadingKcache = false
+                                    mgr.hasOffsets = dlkc
+                                    dlingkcache = false
                                 }
                             }
-                        }) {
-                            if downloadingKcache {
-                                LabeledContent("Downloading Kernelcache...") {
+                        } label: {
+                            if dlingkcache {
+                                HStack {
+                                    Text("Downloading Kernelcache...")
+                                    Spacer()
                                     ProgressView()
                                 }
                             } else {
                                 Text("Download Kernelcache")
                             }
                         }
-                        .disabled(downloadingKcache)
-                    }
-                    
-                    // import kcache
-                    if !mgr.hasOffsets {
+                        .disabled(dlingkcache || !mgr.dsready || (!mgr.vfsready && !mgr.sbxready))
+                               
                         LabeledContent(content: {
                             Button(action: {
-                                showKcacheTips.toggle()
+                                showkcachetips.toggle()
                             }) {
                                 Image(systemName: "info.circle")
                             }
                         }) {
                             Button("Import Kernelcache", action: {
-                                guard !importingKcache else { return }
-                                showKcacheImporter = true
+                                guard !importingkcache else { return }
+                                showkcacheimport = true
                             })
-                            .disabled(importingKcache)
+                            .disabled(dlingkcache || importingkcache)
                         }
-                    }
-                    
-                    // delete kcache data
-                    if mgr.hasOffsets {
+                    } else {
                         Button("Remove Kernelcache", action: {
                             Alertinator.shared.alert(title: "Clear Kernelcache Data?", body: "This will delete all kernelcache data and remove saved offsets. You will have to redownload the data to use lara again.", actionLabel: "Confirm", action: {
                                 clearKcacheData()
                             })
                         })
+                        .foregroundColor(.red)
+                    }
+                } header: {
+                    HeaderLabel(text: "Kernelcache", icon: "cpu")
+                } footer: {
+                    if (!mgr.hasOffsets && (!mgr.dsready || (!mgr.vfsready && !mgr.sbxready))) {
+                        Text("NOTE: You need to Run the Exploit and have Initialized the System before you can download the Kernelcache.\n\nDeleting and redownloading kernelcache may fix some issues. Try doing this before opening a GitHub issue or asking for support in our [Discord](https://discord.gg/gw8PcRF3Jr) server.")
+                    } else {
+                        Text("Deleting and redownloading kernelcache may fix some issues. Try doing this before opening a GitHub issue or asking for support in our [Discord](https://discord.gg/gw8PcRF3Jr) server.")
                     }
                 }
                 
                 // tips
-                if showKcacheTips {
+                if showkcachetips {
                     Section {
                         VStack(alignment: .leading, spacing: 0) {
                             Text("How to obtain a kernelcache (macOS)")
@@ -166,7 +182,7 @@ struct SettingsView: View {
                             }
                         }
                     Toggle("Disable Log Dividers", isOn: $loggerNoBS)
-                    Picker("Logs Display", selection: $selectedLogsDisplayMode) {
+                    Picker("Logs Display", selection: $selectedlogdisplaymode) {
                         ForEach(logsdisplaymode.allCases, id: \.self) { mode in
                             Text(mode.rawValue).tag(mode)
                         }
@@ -193,11 +209,11 @@ struct SettingsView: View {
                 #endif
             }
             .navigationTitle("Settings")
-            .fileImporter(isPresented: $showKcacheImporter, allowedContentTypes: [.data], allowsMultipleSelection: false) { result in
+            .fileImporter(isPresented: $showkcacheimport, allowedContentTypes: [.data], allowsMultipleSelection: false) { result in
                 switch result {
                 case .success(let urls):
                     guard let url = urls.first else { return }
-                    importingKcache = true
+                    importingkcache = true
                     DispatchQueue.global(qos: .userInitiated).async {
                         var ok = false
                         let shouldStopAccess = url.startAccessingSecurityScopedResource()
@@ -214,7 +230,7 @@ struct SettingsView: View {
                                     try fm.removeItem(at: dest)
                                 }
                                 try fm.copyItem(at: url, to: dest)
-                                ok = dlkerncache()
+                                ok = dlkcache()
                             } catch {
                                 print("failed to import kernelcache: \(error)")
                                 ok = false
@@ -222,7 +238,7 @@ struct SettingsView: View {
                         }
                         DispatchQueue.main.async {
                             mgr.hasOffsets = ok
-                            importingKcache = false
+                            importingkcache = false
                         }
                     }
                 case .failure:

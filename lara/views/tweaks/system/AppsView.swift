@@ -275,6 +275,7 @@ struct AppsView: View {
             Section {
                 Button {
                     sbx3apbypass()
+                    scanappssbx()
                 } label: {
                     Text("Bypass 3 App Limit")
                 }

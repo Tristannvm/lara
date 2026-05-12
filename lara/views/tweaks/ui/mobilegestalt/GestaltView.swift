@@ -55,7 +55,12 @@ struct GestaltView: View {
                             Text("iPhone X Gestures").tag(2436)
                         }
                     } label: {
-                        ButtonLabel(text: "Subtype", icon: "iphone")
+                        HStack(spacing: 12) {
+                            Image(systemName: "iphone")
+                                .frame(width: 20, alignment: .center)
+                            Text("Subtype")
+                            Spacer()
+                        }
                     }
                     
                     Toggle("Custom Device Name", isOn: $mgEnableDeviceName)
@@ -165,7 +170,61 @@ struct GestaltView: View {
         }
     }
     
-    // MARK: Load MobileGestalt Data
+    // hope it works, im NOT testing ts
+    private func verifymg(_ plist: Any, targetPath: String = mgCurrentPath) throws -> Data {
+        let fm = FileManager.default
+        
+        if fm.fileExists(atPath: targetPath) {
+            let attrs = try fm.attributesOfItem(atPath: targetPath)
+            if let current = attrs[.size] as? NSNumber,
+               current.intValue == 0 {
+                Alertinator.shared.alert(
+                    title: "Dangerous MobileGestalt State Detected",
+                    body: "The current MobileGestalt file is already 0 bytes. Overwriting has been aborted to prevent corruption."
+                )
+                throw "Current MobileGestalt file is 0 bytes."
+            }
+        }
+        
+        guard PropertyListSerialization.propertyList(plist, isValidFor: .binary) else {
+            Alertinator.shared.alert(
+                title: "Invalid Property List",
+                body: "The MobileGestalt plist is invalid and cannot be written safely."
+            )
+            throw "Invalid plist structure."
+        }
+        
+        let data = try PropertyListSerialization.data(
+            fromPropertyList: plist,
+            format: .binary,
+            options: 0
+        )
+        
+        if data.isEmpty || data.count == 0 {
+            Alertinator.shared.alert(
+                title: "Refusing Empty MobileGestalt Write",
+                body: "The generated MobileGestalt plist would become 0 bytes after overwrite. Operation cancelled."
+            )
+            throw "Serialized plist data is empty."
+        }
+        
+        do {
+            _ = try PropertyListSerialization.propertyList(
+                from: data,
+                options: [],
+                format: nil
+            )
+        } catch {
+            Alertinator.shared.alert(
+                title: "Invalid Serialized Property List",
+                body: "The generated MobileGestalt plist failed validation after serialization."
+            )
+            throw "Serialized plist validation failed."
+        }
+        
+        return data
+    }
+    
     private func loadCurrentGestalt() {
         do {
             mgCurrentDict = try NSMutableDictionary(contentsOf: URL(fileURLWithPath: mgCurrentPath), error: ())
@@ -229,8 +288,8 @@ struct GestaltView: View {
             // then, check to make sure it's actually valid
             if !vaildateCacheExtra(mgCurrentDict) { throw "MobileGestalt is not vaild! Please restart the app." }
             
-            // finally, apply
-            let mgData = try PropertyListSerialization.data(fromPropertyList: mgCurrentDict, format: .binary, options: 0)
+            // bro please dont bootloop
+            let mgData = try verifymg(mgCurrentDict)
             let result = mgr.lara_overwritefile(target: mgCurrentPath, data: mgData)
             
             if result.ok {
@@ -249,7 +308,9 @@ struct GestaltView: View {
             let mgSavedURL = docsDir.appendingPathComponent("SavedGestalt.plist")
             
             if FileManager.default.fileExists(atPath: mgSavedURL.path) {
-                mgCurrentDict = try NSMutableDictionary(contentsOf: mgSavedURL, error: ())
+                let restored = try NSMutableDictionary(contentsOf: mgSavedURL, error: ())
+                _ = try verifymg(restored)
+                mgCurrentDict = restored
             } else {
                 throw "No MobileGestalt file found!"
             }
@@ -258,7 +319,6 @@ struct GestaltView: View {
         }
     }
     
-    // MARK: MobileGestalt Binding
     func isDeviceNotBroke() -> Bool {
         let supportedDevices: [String] = ["iPhone15,2", "iPhone15,3", "iPhone15,4", "iPhone15,5", "iPhone16,1", "iPhone16,2", "iPhone17,3", "iPhone17,4", "iPhone17,1", "iPhone17,2", "iPhone18,3", "iPhone18,1", "iPhone18,2", "iPhone17,5"]
         if supportedDevices.contains(machineName()) && doubleSystemVersion() < 19.0 {
@@ -280,6 +340,7 @@ struct GestaltView: View {
     }
 
     // default = 0 (off in Gesalt Terms), enable = 1 (on)
+    // "gesalt" lol (roooot, 12.05.2026)
     // return just returns a boolean
     private func mgKeyBinding<T: Equatable>(_ keys: [String], type: T.Type = Int.self, defaultValue: T? = 0, enableValue: T? = 1) -> Binding<Bool>  {
         // immediately return false if it can't find cacheextra, again why is this here? i think it's safety.
