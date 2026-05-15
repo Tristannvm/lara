@@ -110,16 +110,20 @@ private struct santanderitem: Identifiable, Hashable {
     let path: String
     let name: String
     let display: String
+    let isApp: Bool
+    let appUDID: String
     let isdir: Bool
     let type: UTType?
 
     var id: String { path }
 
-    init(path: String, isdir: Bool, display: String? = nil) {
+    init(path: String, isdir: Bool, display: String? = nil, isApp: Bool = false, appUDID: String = "") {
         self.path = path
         self.isdir = isdir
         let name = path == "/" ? "/" : (path as NSString).lastPathComponent
         self.name = name
+        self.isApp = isApp
+        self.appUDID = appUDID
         self.display = display ?? name
         let ext = (path as NSString).pathExtension
         self.type = ext.isEmpty ? nil : UTType(filenameExtension: ext)
@@ -462,7 +466,8 @@ private struct santanderdirview: View {
             Text("Delete \(delitem?.name ?? "item")?")
         }
         .sheet(item: $infoitem) { entry in
-            santanderinfosheet(title: entry.name, text: santanderfs.details(path: entry.path))
+            // enable this = instant death
+            //santanderinfosheet(title: entry.name, file: santanderfs.fileDetails(path: entry.path))
         }
         .sheet(item: $renameitem) { entry in
             santandernamesheet(
@@ -524,6 +529,13 @@ private struct santanderdirview: View {
                     .foregroundColor(entry.name.hasPrefix(".") ? .gray : .primary)
                     .lineLimit(1)
                     .truncationMode(.middle)
+                
+                if entry.isApp {
+                    Text(entry.appUDID)
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
 
                 if !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     Text(entry.path)
@@ -1022,14 +1034,20 @@ private enum santanderfs {
                 var isdir = ObjCBool(false)
                 fm.fileExists(atPath: full, isDirectory: &isdir)
                 var display = name
+                var isApp = false
+                var appUDID = ""
 
                 if mode != .UUID, isdir.boolValue {
                     if bundledirs.contains(item.path), mode == .appName {
                         display = bundleappname(at: full) ?? name
+                        isApp = true
+                        appUDID = name
                     } else if let bundleid = bundleidforcontainer(at: full) {
                         switch mode {
                         case .appName:
                             display = appnames[bundleid] ?? bundleid
+                            isApp = true
+                            appUDID = name
                         case .bundleID:
                             display = bundleid
                         case .UUID:
@@ -1038,7 +1056,7 @@ private enum santanderfs {
                     }
                 }
 
-                return santanderitem(path: full, isdir: isdir.boolValue, display: display)
+                return santanderitem(path: full, isdir: isdir.boolValue, display: display, isApp: isApp, appUDID: appUDID)
             }
 
             return santanderlisting(items: items, empty: items.isEmpty ? "Directory is empty." : nil)
@@ -1124,60 +1142,59 @@ private enum santanderfs {
         }
     }
 
-    static func details(path: String) -> String {
+    static func fileDetails(path: String) -> FileInfoProperties {
         let fm = FileManager.default
-        var lines: [String] = []
-
+        var info: FileInfoProperties = FileInfoProperties(fileExists: false, kind: "", uttype: "", size: 0, created: "", modified: "", isSymlink: false, posixPerms: "", owner: "", group: "", readable: false, writable: false, executable: false)
+        
+        // check if file exists & get type
         var isdir = ObjCBool(false)
         let exists = fm.fileExists(atPath: path, isDirectory: &isdir)
-        lines.append("Exists: \(exists ? "yes" : "no")")
+        
         if exists {
-            lines.append("Kind: \(isdir.boolValue ? "directory" : "file")")
+            info.fileExists = exists
+            info.kind = isdir.boolValue ? "directory" : "file"
         }
-
+        
+        // get particular file info
         let url = URL(fileURLWithPath: path)
-        let keys: Set<URLResourceKey> = [
-            .contentTypeKey,
-            .fileSizeKey,
-            .creationDateKey,
-            .contentModificationDateKey,
-            .isSymbolicLinkKey
-        ]
-
+        let keys: Set<URLResourceKey> = [.contentTypeKey, .fileSizeKey, .creationDateKey, .contentModificationDateKey, .isSymbolicLinkKey]
+        
         if let values = try? url.resourceValues(forKeys: keys) {
             if let type = values.contentType {
-                lines.append("UTType: \(type.identifier)")
+                info.uttype = type.identifier
             }
             if let size = values.fileSize {
-                lines.append("Size: \(size) bytes")
+                info.size = size
             }
             if let created = values.creationDate {
-                lines.append("Created: \(created)")
+                info.created = created.description
             }
             if let modified = values.contentModificationDate {
-                lines.append("Modified: \(modified)")
+                info.modified = modified.description
             }
             if let sym = values.isSymbolicLink {
-                lines.append("Symlink: \(sym ? "yes" : "no")")
+                info.isSymlink = sym
             }
         }
-
+        
+        // now get permissions
         if let attrs = try? fm.attributesOfItem(atPath: path) {
             if let perms = attrs[.posixPermissions] as? NSNumber {
-                lines.append(String(format: "POSIX perms: %04o", perms.intValue))
+                info.posixPerms = String(format: "%04o", perms.intValue)
             }
             if let owner = attrs[.ownerAccountName] as? String {
-                lines.append("Owner: \(owner)")
+                info.owner = owner
             }
             if let group = attrs[.groupOwnerAccountName] as? String {
-                lines.append("Group: \(group)")
+                info.group = group
             }
         }
-
-        lines.append("Readable: \(fm.isReadableFile(atPath: path) ? "yes" : "no")")
-        lines.append("Writable: \(fm.isWritableFile(atPath: path) ? "yes" : "no")")
-        lines.append("Executable: \(fm.isExecutableFile(atPath: path) ? "yes" : "no")")
-        return lines.joined(separator: "\n")
+        
+        info.readable = fm.isReadableFile(atPath: path)
+        info.writable = fm.isWritableFile(atPath: path)
+        info.executable = fm.isExecutableFile(atPath: path)
+        
+        return info
     }
 
     static func loadfile(item: santanderitem, readsbx: Bool) -> santanderloadedfile {
@@ -1462,26 +1479,85 @@ private enum santanderfs {
     }
 }
 
-private struct santanderinfosheet: View {
-    let title: String
-    let text: String
-    @Environment(\.dismiss) private var dismiss
+private struct FileInfoProperties {
+    var id = UUID()
+    var fileExists: Bool
+    var kind: String
+    var uttype: String
+    var size: Int
+    var created: String
+    var modified: String
+    var isSymlink: Bool
+    var posixPerms: String
+    var owner: String
+    var group: String
+    var readable: Bool
+    var writable: Bool
+    var executable: Bool
+}
 
+private struct santanderinfosheet: View {
+    @Environment(\.dismiss) var dismiss
+    
+    var name: String
+    var file: FileInfoProperties
+    
     var body: some View {
         NavigationStack {
-            ScrollView {
-                Text(text)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding()
-                    .textSelection(.enabled)
+            List {
+                Section {
+                    HStack {
+                        Image(systemName: file.kind == "directory" ? "folder" : "doc")
+                        VStack {
+                            Text(name)
+                            Text("\(file.size) bytes")
+                        }
+                    }
+                }
+                
+                Section(header: HeaderLabel(text: "File Information", icon: "info.circle")) {
+                    LabeledContent("UTType") {
+                        Text(file.uttype)
+                    }
+                    LabeledContent("Creation Date") {
+                        Text(file.created)
+                    }
+                    LabeledContent("Last Modified") {
+                        Text(file.modified)
+                    }
+                    LabeledContent("Symlink") {
+                        Image(systemName: file.isSymlink ? "checkmark" : "xmark")
+                    }
+                }
+                
+                Section(header: HeaderLabel(text: "Permissions", icon: "shield")) {
+                    LabeledContent("POSIX Permissions") {
+                        Text(file.posixPerms)
+                    }
+                    LabeledContent("Owner") {
+                        Text(file.owner)
+                    }
+                    LabeledContent("Group") {
+                        Text(file.group)
+                    }
+                    LabeledContent("Readable") {
+                        Image(systemName: file.readable ? "checkmark" : "xmark")
+                    }
+                    LabeledContent("Writable") {
+                        Image(systemName: file.writable ? "checkmark" : "xmark")
+                    }
+                    LabeledContent("Executable") {
+                        Image(systemName: file.executable ? "checkmark" : "xmark")
+                    }
+                }
             }
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationTitle("File Info")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Done") {
+                    Button(action: {
                         dismiss()
+                    }) {
+                        Image(systemName: "xmark")
                     }
                 }
             }
