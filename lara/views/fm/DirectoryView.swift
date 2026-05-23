@@ -355,12 +355,14 @@ struct santanderdirview: View {
         }
         .sheet(item: $chmoditem) { entry in
             santanderchmodsheet(item: entry) { mode in
+                santanderfs.clearImmutableIfPossible(atPath: entry.path)
                 let ok = entry.path.withCString { apfs_mod($0, mode) == 0 }
                 msg = santandermsg(title: "Chmod", text: ok ? "Operation completed." : "Operation failed.")
             }
         }
         .sheet(item: $chownitem) { entry in
             santanderchownsheet(item: entry) { uid, gid in
+                santanderfs.clearImmutableIfPossible(atPath: entry.path)
                 let ok = entry.path.withCString { apfs_own($0, uid, gid) == 0 }
                 msg = santandermsg(title: "Chown", text: ok ? "Operation completed." : "Operation failed.")
             }
@@ -460,6 +462,7 @@ struct santanderdirview: View {
         }
 
         do {
+            santanderfs.clearImmutableIfPossible(atPath: entry.path)
             try FileManager.default.moveItem(atPath: entry.path, toPath: dest)
             model.load(query: query.trimmingCharacters(in: .whitespacesAndNewlines))
         } catch {
@@ -544,7 +547,7 @@ struct santanderdirview: View {
 
         do {
             if replace && FileManager.default.fileExists(atPath: dest) {
-                try FileManager.default.removeItem(atPath: dest)
+                try santanderfs.removeItemClearingImmutable(atPath: dest)
             }
             try FileManager.default.copyItem(atPath: clipitem.path, toPath: dest)
             model.load(query: query.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -578,7 +581,7 @@ struct santanderdirview: View {
 
         do {
             if FileManager.default.fileExists(atPath: entry.path) {
-                try FileManager.default.removeItem(atPath: entry.path)
+                try santanderfs.removeItemClearingImmutable(atPath: entry.path)
             }
             try FileManager.default.copyItem(atPath: clipitem.path, toPath: entry.path)
             model.load(query: query.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -594,7 +597,7 @@ struct santanderdirview: View {
         }
 
         do {
-            try FileManager.default.removeItem(atPath: entry.path)
+            try santanderfs.removeItemClearingImmutable(atPath: entry.path)
             model.load(query: query.trimmingCharacters(in: .whitespacesAndNewlines))
         } catch {
             msg = santandermsg(title: "Delete Failed", text: error.localizedDescription)
@@ -617,7 +620,7 @@ struct santanderdirview: View {
 
         do {
             if FileManager.default.fileExists(atPath: dest) {
-                try FileManager.default.removeItem(atPath: dest)
+                try santanderfs.removeItemClearingImmutable(atPath: dest)
             }
             try FileManager.default.copyItem(at: url, to: URL(fileURLWithPath: dest))
             model.load(query: query.trimmingCharacters(in: .whitespacesAndNewlines))
