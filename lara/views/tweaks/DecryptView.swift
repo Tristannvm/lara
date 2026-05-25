@@ -285,16 +285,11 @@ struct DecryptView: View {
                 return
             }
 
-            let frameworksPath = destAppPath + "/Frameworks"
-            if fm.fileExists(atPath: frameworksPath) {
-                guard let frameworks = try? fm.contentsOfDirectory(atPath: frameworksPath) else {
-                    DispatchQueue.main.async {
-                        decryptingbid = nil
-                        errormsg = "Failed to list frameworks"
-                        laramgr.shared.logmsg("(decrypt) failed to list frameworks")
-                    }
-                    return
-                }
+            let srcFrameworks = app.bundlepath + "/Frameworks"
+            var srcFwSt = stat()
+            if stat(srcFrameworks, &srcFwSt) == 0 {
+                let frameworksPath = destAppPath + "/Frameworks"
+                let frameworks = (try? fm.contentsOfDirectory(atPath: frameworksPath)) ?? []
                 for fw in frameworks where fw.hasSuffix(".framework") {
                     let fwName = (fw as NSString).deletingPathExtension
                     let fwBinary = frameworksPath + "/" + fw + "/" + fwName
