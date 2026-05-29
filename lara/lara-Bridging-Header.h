@@ -18,6 +18,7 @@
 #import "RemoteCall.h"
 #import "decrypt.h"
 #import "persistence.h"
+#import "ota.h"
 
 #import <zlib.h>
 
