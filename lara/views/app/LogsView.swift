@@ -45,6 +45,7 @@ struct LogsView: View {
                 ToolbarItemGroup(placement: .navigationBarTrailing) {
                     ShareLink(item: logsURL) {
                         Image(systemName: "square.and.arrow.up")
+                           .tint(Color("laraAccent"))
                     }
 
                     Button {
@@ -53,6 +54,7 @@ struct LogsView: View {
                         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                     } label: {
                         Image(systemName: "doc.on.doc")
+                            .tint(Color("laraAccent"))
                     }
                     
                     Button {
